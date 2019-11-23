@@ -2,7 +2,7 @@
 
 To run MATHSdaq:
 
-    System requriments: **Only operates on Windows and Linux *MacOS is not supported***
+    System requriments: **Only operates on Windows and Linux**  **MacOS is not supported**
     
     1.  Update Handyscope drivers using the downloads on the TiePie website
     
