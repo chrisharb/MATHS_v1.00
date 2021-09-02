@@ -1,5 +1,5 @@
 function varargout = MATHSdaq(varargin)
-% MATHSDAQ MATLAB code for MATHSdaq_1.fig
+% MATHSDAQ MATLAB code for MATHSdaq.fig
 %% mathsdaq.m
 % This GUI code interfaces with TiePie oscilloscopes (Model HS3--> onwards)
 % using the LibTiePie SDI plugin. Measurements may be performed in a
@@ -28,7 +28,7 @@ function varargout = MATHSdaq(varargin)
 %
 % See also: GUIDE, GUIDATA, GUIHANDLES
 
-% Edit the above text to modify the response to help MATHSdaq_1
+% Edit the above text to modify the response to help MATHSdaq
 
 % Last Modified by GUIDE v2.5 15-May-2021 14:14:04
 
@@ -57,29 +57,30 @@ function MATHSdaq_OpeningFcn(hObject, eventdata, handles, varargin)
 % hObject    handle to figure
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
-% varargin   command line arguments to MATHSdaq_1 (see VARARGIN)
-% Choose default command line output for MATHSdaq_1
+% varargin   command line arguments to MATHSdaq (see VARARGIN)
+% Choose default command line output for MATHSdaq
 if ismac
     disp('LibTiePie is not compatible with MacOS, aborting program. Bye.')
     clear; close all
     return
 else
-cdir = pwd();
-eval(['addpath ' cdir])
-handles.output = hObject;
+cdir = pwd(); %Get working directory to import subpaths
+eval(['addpath ' cdir])  % add library paths
+handles.output = hObject; % Update handles
 disp('Launching MATHSdaq and building LibTiePie');
-handles.LibTiePie = LibTiePie.Library;
+handles.LibTiePie = LibTiePie.Library; % Compile LibTiePie c library
+ % Return library compilation status in pop up window
 i = msgbox(['Status of library initialisation: ' handles.LibTiePie.LastStatusStr ', click OK to continue']);
-while ishandle(i)
+while ishandle(i) % Wait for user acknowledgement of status
     pause(0.01)
 end
-handles.counter = 0;
+handles.counter = 0; % Initialise the counter
 end
-guidata(hObject, handles);
+guidata(hObject, handles); % Update handles
 
 
 % --- Outputs from this function are returned to the command line.
-function varargout = MATHSdaq_OutputFcn(hObject, eventdata, handles) 
+function varargout = MATHSdaq_OutputFcn(hObject, eventdata, handles)
 % varargout  cell array for returning output args (see VARARGOUT);
 % hObject    handle to figure
 % eventdata  reserved - to be defined in a future version of MATLAB
@@ -97,65 +98,83 @@ function uipanel1_CreateFcn(hObject, eventdata, handles)
 
 
 % --- Executes on button press in init.
+% Calls function get_scp() to open connection to handyscope(s)
 function init_Callback(hObject, eventdata, handles)
 % hObject    handle to init (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
 import LibTiePie.Const.*;
 import LibTiePie.Enum.*;
+% Confirm user intends to search for handyscopes, accidental click after initial connection will throw an error exception
 sel = questdlg('Search for Handyscopes?','Connecting to instruments','OK','Cancel','Cancel');
-if strcmp(sel,'Cancel')
+if strcmp(sel,'Cancel') % Cancel search
     return
 else
+    % Open connection to handyscope(s)
     [handles.scp,handles.SN,handles.sn_c,handles.PID,handles.nscp] = get_scp(handles.LibTiePie);
+    % Case -1, no handyscopes found or .dll error
     if handles.scp == -1
-        set(handles.msg_box,'String','No oscilloscopes found, if you are experiencing difficulties try turning it on and off again...');
+        set(handles.msg_box,'String','No oscilloscopes found, if you are experiencing difficulties try turning it on and off again.');
+    % Other case, handyscopes found, set up display graphics
     else
-        handles.chans = length(handles.scp.Channels);
-        for i = 1:handles.chans
-     
-        end
-        handles.res = handles.scp.Resolutions;
-        headers = [];
-        dat={};
-        serial = [];
+        handles.chans = length(handles.scp.Channels); % Get total number of channels
+        handles.res = handles.scp.Resolutions; % Read supported bitness
+        headers = []; % Initialise settings table headers
+        dat={}; % Initialise settings table data
+        serial = []; % Initialise serial number array
+        % Loop to create string of serial numbers of each instrument
         for i = 1:length(handles.SN)
             serial = [serial; ['Osc' num2str(i) ' SN: ' num2str(handles.SN(i))]];
         end
+        % Print serial number dialog to message box
         set(handles.serials,'String',serial);
+
         for j = 1:handles.chans
-            dat = [dat; {false  false 'set'}];
-            headers = [headers; {num2str(j)}];
-            handles.AR = handles.scp.Channels(j).AutoRanging;
+            dat = [dat; {true  true '8'}]; % Initialise channel settings
+            headers = [headers; {['Chan' num2str(j)]}]; % Assign each channel name
+            handles.AR = handles.scp.Channels(j).AutoRanging; % Establish if autorange available
         end
-        handles.ctot = sum(handles.chans);
-        i1 = 4;
-        i2 = ceil(handles.ctot/4);
-        for i = 1:handles.ctot
-            handles.ax(i)=subplot(i1,i2,i,'Parent',handles.uipanel1);
-            handles.line(i)=plot(handles.ax(i),rand(10,1));
-            xlabel(handles.ax(i),'Time [s]')
-            ylabel(handles.ax(i),'Volts')
-            title(handles.ax(i),['Channel ' num2str(i)])
+        rows = ceil(handles.chans/4); % get number of rows for plot window
+        for i = 1:handles.chans % Create graphs for live plotting
+            handles.ax(i)=subplot(4,rows,i,'Parent',handles.uipanel1);
+            handles.line(i)=plot(handles.ax(i),rand(10,1)); % Check plot refs are working
+            xlabel(handles.ax(i),'Time [s]'); % Label x-axis
+            ylabel(handles.ax(i),'Volts');  % Label y-axis
+            title(handles.ax(i),['Channel ' num2str(i)]) % Title each plot window
         end
-        handles.resolution = {'8 bit','12 bit','14 bit','16 bit'};
-        handles.res_pop.String = handles.resolution;
-        handles.v_range = {'0.2','0.4','0.8','2','4','8','20','40','80'};
-        handles.f_range.String = '1e6';
-        handles.nsamps.String = '128e3';
-        handles.uitable1.ColumnEditable = [true true true];
-        handles.uitable1.ColumnName = {'Use?','Trigger?','Scale'};
-        handles.uitable1.RowName = cellstr(headers);
-        handles.uitable1.Data = dat;
-        handles.uitable1.ColumnFormat(3) = {handles.v_range};
-        handles.samp_freq.String = '1e6';
-        handles.n_samps.String = '1e5';
-        handles.ratio = 0:0.05:1;
-        handles.trigger_r.String = cellstr(num2str(handles.ratio'));
-        handles.trig_type.String = {'Rising edge','Falling edge','Threshold'};
+%         for i = 1:length(handles.res) % To be added at a later date
+%         automatically assign bitness according to supported resolutions
+        if handles.PID(1) == 13 % Set bitness options according to handyscope model
+            handles.resolution = {'8 bit','12 bit','14 bit','16 bit'};
+            handdles.res_opts = [8 12 14 16];
+        elseif handles.PID(1) == 15
+            handles.resolution = {'12 bit','14 bit','16 bit'};
+            handles.res_opts = [12 14 16];
+        elseif handles.PID(1) == 20
+            handles.resolution = {'12 bit','14 bit','16 bit'};
+            handles.res_opts = [12 14 16];
+        else
+            handles.resolution = {'8 bit','12 bit','14 bit','16 bit'};
+            handles.res_opts = [8 12 14 16];
+        end
+        handles.res_pop.String = handles.resolution; % Update resoultion listbox
+        % Set voltage range settings according to available ranges across all models, again should be defined according to models in future update
+        handles.v_range = {'0.2','0.4','0.8','2','4','8','20','40','80'}; 
+        handles.f_range.String = '1e6'; % Set a default sampling resolution , value is often modified by dll to match handyscope clock
+        handles.nsamps.String = '128e3'; % Number of samples per chunk
+        handles.uitable1.ColumnEditable = [true true true]; % Allow editing of all channel settings
+        handles.uitable1.ColumnName = {'Use?','Trigger?','Scale'}; % Title settings columns
+        handles.uitable1.RowName = cellstr(headers); % Title channels
+        handles.uitable1.Data = dat; % Initialise settings table with initial settings
+        handles.uitable1.ColumnFormat(3) = {handles.v_range}; % Set voltage ranges in listbox
+        handles.samp_freq.String = '1e6'; % Initialise frequency settings
+        handles.n_samps.String = '1e5'; % sample points settings
+        handles.ratio = 0:0.05:1; % Itrigger ratio settings
+        handles.trigger_r.String = cellstr(num2str(handles.ratio')); % Generate trigger ratio options
+        handles.trig_type.String = {'Rising edge','Falling edge','Threshold'}; % Trigger type settings
     end
 end
-guidata(hObject,handles);
+guidata(hObject,handles); % Update GUI options
 
 
 % Hint: get(hObject,'Value') returns toggle state of init
@@ -216,65 +235,58 @@ function arm_Callback(hObject, eventdata, handles)
 % hObject    handle to arm (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
-import LibTiePie.Const.*;
-import LibTiePie.Enum.*;
-handles.LibTiePie.DeviceList.update();
-handles.dispstr = [];
-if any(handles.scp.IsRunning==1)
+import LibTiePie.Const.*;   % Import constants
+import LibTiePie.Enum.*;    % Import enumeration constants
+handles.LibTiePie.DeviceList.update(); % Update device list and check status
+handles.dispstr = []; % Clear display
+if any(handles.scp.IsRunning==1) 
+% Check if scopes are running, trying to arm whilst running will cause a crash
     handles.scp(1).stop();
     set(handles.msg_box,'String','Stopping the TiePie in order to arm it')
 end
-table = get(handles.uitable1,'Data');
-handles.settings.fs = str2double(get(handles.samp_freq,'String'));
-handles.settings.nsamp = str2double(get(handles.n_samps,'String'));
-handles.settings.chan_enabled = cell2mat(table(:,1));
-handles.settings.chan_trig = cell2mat(table(:,2));
-handles.settings.chan_range = string(table(:,3));
-if handles.PID(1) == 13
-    res = [8 12 14 16];
-elseif handles.PID(1) == 15
-    res = [12 14 16];
-elseif handles.PID(1) == 20
-    res = [12 14 16];
-else
-    res = [8 12 14 16];
-end
-handles.scp(1).Resolution = res(handles.res_pop.Value);
-ratio = handles.ratio(get(handles.trigger_r,'Value'));
-handles.settings.trig_r = ratio;
+table = get(handles.uitable1,'Data'); % Getting settings from table
+handles.settings.fs = str2double(get(handles.samp_freq,'String')); % Update sampling frequency
+handles.settings.nsamp = str2double(get(handles.n_samps,'String')); % Update number of samples per channel
+handles.settings.chan_enabled = cell2mat(table(:,1)); % Get channel usage imformation
+handles.settings.chan_trig = cell2mat(table(:,2));  % Get trigger settings
+handles.settings.chan_range = string(table(:,3));   % Get channel range settings
 
-if get(handles.cont,'Value')==0
-     set(handles.msg_box,'String','Trigger mode selected'); %Tell the user which channel is the trigger
-    handles.scp(1).MeasureMode = MM.BLOCK;
-elseif get(handles.cont,'Value')==1
+handles.scp(1).Resolution = handles.res_opts(handles.res_pop.Value); % Set bitness
+ratio = handles.ratio(get(handles.trigger_r,'Value')); % Get trigger ratio value
+handles.settings.trig_r = ratio; % Store trigger ratio value
+
+if get(handles.cont,'Value')==0 % Is trigger mode selected?
+    set(handles.msg_box,'String','Trigger mode selected'); %Tell the user which channel is the trigger
+    handles.scp(1).MeasureMode = MM.BLOCK; % Set handyscopes into "Block measurement mode"
+elseif get(handles.cont,'Value')==1 % Continuous streaming selected
     set(handles.msg_box,'String','Continuous streaming mode selected'); %Tell the user which channel is the trigger
-    handles.scp(1).MeasureMode = MM.STREAM;
+    handles.scp(1).MeasureMode = MM.STREAM; % Set handyscopes into "Stream" continuous measurement
 else
     error('Incorrect mode set')
 end
-handles.scp(1).SampleFrequency = handles.settings.fs; % 1 MHz
-handles.scp(1).RecordLength = handles.settings.nsamp; % 10000 Samples
-if get(handles.cont,'Value')==0
-    handles.scp.PreSampleRatio = handles.settings.trig_r;% handles.settings.trig_r; % 0 %
+handles.scp(1).SampleFrequency = handles.settings.fs; % Set sample frequency
+handles.scp(1).RecordLength = handles.settings.nsamp; % Set number of samples per chunk
+if get(handles.cont,'Value')==0 % Check if in triggered mode
+    handles.scp.PreSampleRatio = handles.settings.trig_r;% Set trigger ratio
     for ch = 1:length(handles.scp.Channels)
-        handles.scp(1).Channels(ch).Trigger.Enabled = false;
+        handles.scp(1).Channels(ch).Trigger.Enabled = false; % Turn all triggers off to clear previous settings
     end
 end
 
 for ch = 1:handles.chans
-    if logical(handles.settings.chan_enabled(ch))==1
+    if logical(handles.settings.chan_enabled(ch))==1 % Check if channel enabled
         handles.scp.Channels(ch).Enabled = logical(handles.settings.chan_enabled(ch)); %Set whether the channel records
         if strcmp(handles.settings.chan_range(ch),'auto')
-            handles.scp.Channels(ch).AutoRanging = 1;
+            handles.scp.Channels(ch).AutoRanging = 1; % Set to autorange
         else
             handles.scp.Channels(ch).Range = double(handles.settings.chan_range(ch)); %Set the voltage range of the individual channel
         end
-        handles.scp.Channels(ch).Coupling = CK.DCV; %Set the coupling of the channel
+        handles.scp.Channels(ch).Coupling = CK.DCV; %Set the coupling of the channel, currently no other option specified since nearly all measurments are DC
     else %For disabled channels just disable them
-        handles.scp.Channels(ch).Enabled = logical(handles.settings.chan_enabled(ch)); 
+        handles.scp.Channels(ch).Enabled = logical(handles.settings.chan_enabled(ch));
     end
-    if logical(handles.settings.chan_trig(ch)) == true && get(handles.cont,'Value')==0
-        %handles.dispstr = [handles.dispstr; []];
+    % Check if channel is selected as a trigger, and that triggered mode is selected
+    if logical(handles.settings.chan_trig(ch)) == true && get(handles.cont,'Value')==0 
         set(handles.msg_box,'String',['Trigger set on ' num2str(ch)]); %Tell the user which channel is the trigger
         handles.scp.Channels(ch).Trigger.Enabled = true; %Set the trigger on the current channel
         handles.scp.TriggerTimeOut = -1; % Set the trigger to wait forever
@@ -284,14 +296,13 @@ for ch = 1:handles.chans
         elseif handles.trig_type.Value == 2
             handles.scp(1).Channels(ch).Trigger.Kind = TK.FALLINGEDGE; %Set falling edge trigger
         elseif handles.trig_type.Value == 3
-            handles.scp(1).Channels(ch).Trigger.Kind = TK.ANYEDGE;
+            handles.scp(1).Channels(ch).Trigger.Kind = TK.ANYEDGE; % Set any edge trigger
         end
         handles.scp(1).Channels(ch).Trigger.Levels(1) = str2double(get(handles.trig_t,'String')); %Set the trigger according to the input string
         handles.scp(1).Channels(ch).Trigger.Hystereses(1) = str2double(get(handles.hys,'String')); %Set the trigger hysteresis according to the input string
     end
 end
-%handles.dispstr = [handles.dispstr; ];
-set(handles.msg_box,'String','Oscilloscopes successfully armed'); %Tell the user which channel is the trigger
+set(handles.msg_box,'String','Oscilloscopes successfully armed'); %Tell the user that the oscilloscopes have been armed
 guidata(hObject,handles)
 
 
@@ -343,12 +354,18 @@ end
 
 % --- Executes on button press in acq.
 function acq_Callback(hObject, eventdata, handles)
+% Contains the acquisition code, of which there are 4 modes, triggered with
+% plotting enabled, triggered with plotting disabled, continunous with
+% plotting enabled and continuous with plotting disabled. Each case is
+% coded independtly to avoid checking each loop individual settings.
 % hObject    handle to acq (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
 import LibTiePie.Const.*;
 import LibTiePie.Enum.*;
-if get(handles.acq, 'Value')==0
+arm_Callback(hObject, eventdata, handles); % Run the arm callback to apply any changed settings
+
+if get(handles.acq, 'Value')==0 % If acquisition stopped re-enable disabled controls
     set(handles.acq,'String','Start acquisition');
     set(handles.init,'enable','on');
     set(handles.samp_freq,'enable','on');
@@ -358,8 +375,9 @@ if get(handles.acq, 'Value')==0
     set(handles.hys,'enable','on');
     set(handles.autodir,'enable','on');
     set(handles.trigger_r,'enable','on');
+     set(hnadles.plot_data,'enable','on');
     return
-else
+else % Disable controls during acquisition
     set(handles.init,'enable','off');
     set(handles.samp_freq,'enable','off');
     set(handles.uitable1,'enable','off');
@@ -368,6 +386,7 @@ else
     set(handles.hys,'enable','off');
     set(handles.autodir,'enable','off');
     set(handles.trigger_r,'enable','off');
+    set(hnadles.plot_data,'enable','off');
     set(handles.acq,'String','Stop acquisition');
     handles.counter = 0;
     set(handles.sng_shot,'Value',0);
@@ -385,6 +404,7 @@ else
         disp('Start')
     elseif any(handles.scp(1).IsRunning==1)
         handles.scp.stop();
+        wait(0.1)
         handles.scp.start();
         set(handles.msg_box,'String','Stop Start')
     end
@@ -393,29 +413,24 @@ else
     if get(handles.cont,'Value') == 1 && get(handles.plot_data,'Value') == 1
         set(handles.msg_box,'String','Acquisition running')
         while 1
-            while ~handles.scp.IsDataReady
-                pause(1e-4); % 1 ms delay, to save CPU time
-                if get(handles.acq,'Value') == 0
-                    set(handles.acq,'enable','off')
-                    set(handles.msg_box,'String','Acquisition is stopping')
-                end
+            while ~handles.scp.IsDataReady %Check if data is avaible
+                pause(1e-4); % 1 ms delay, to save CPU time, otherwise wait on scopes
             end
-            handles.counter = handles.counter+1;
-            % Get data:
-            time1 = datestr(now,'HHMMSS');
-            time2 = datestr(now,'mmmm dd, yyyy HH:MM:SS.FFF');
-            arData = handles.scp(1).getData();
-            freq = handles.scp(1).SampleFrequency;
-            filename = strcat(num2str(handles.counter),'_',num2str(time1),'.mat');
-            save(filename,'arData','time2','freq');
-            for j = 1:handles.ctot
+            arData = handles.scp(1).getData(); % Get data from the scope
+            freq = handles.scp(1).SampleFrequency; % Get actual sampling frequency of data
+            handles.counter = handles.counter+1; % Data is available update counter to let the user know
+            time1 = datestr(now,'HHMMSS'); % Get time to name individual file
+            time2 = datestr(now,'mmmm dd, yyyy HH:MM:SS.FFF'); % Get time accurate to ms from PC
+            filename = strcat(num2str(handles.counter),'_',num2str(time1),'.mat'); % Create filename string
+            save(filename,'arData','time2','freq'); % Save data to .mat format
+            for j = 1:handles.ctot % Plot streamed data
                 plot(handles.ax(j),(1:length(arData(:,j))) / handles.scp(1).SampleFrequency,arData(:,j));
                 xlabel(handles.ax(j),'Time [s]')
                 ylabel(handles.ax(j),'Volts')
                 title(handles.ax(j),['Channel ' num2str(j)])
             end
-            set(handles.n_trigs,'String',num2str(handles.counter))
-            if get(handles.acq,'Value') == 0 
+            set(handles.n_trigs,'String',num2str(handles.counter)) % Update counter value
+            if get(handles.acq,'Value') == 0 % If acquistion has been stopped break the loop
                 break
             end
         end
@@ -455,11 +470,11 @@ else
                     handles.scp(1).forceTrigger();
                     set(handles.sng_shot,'Value',0);
                     set(handles.sng_shot,'enable','off')
-                elseif get(handles.acq,'Value') == 0 
-                    break    
+                elseif get(handles.acq,'Value') == 0
+                    break
                 end
             end
-            if get(handles.acq,'Value') == 0 
+            if get(handles.acq,'Value') == 0
                 break
             end
             set(handles.msg_box,'String','Triggered')
@@ -491,11 +506,11 @@ else
                     handles.scp(1).forceTrigger();
                     set(handles.sng_shot,'Value',0);
                     set(handles.sng_shot,'enable','off')
-                elseif get(handles.acq,'Value') == 0 
+                elseif get(handles.acq,'Value') == 0
                     break
                 end
             end
-            if get(handles.acq,'Value') == 0 
+            if get(handles.acq,'Value') == 0
                 break
             end
             set(handles.msg_box,'String','Triggered')
@@ -524,8 +539,6 @@ set(handles.hys,'enable','on');
 set(handles.autodir,'enable','on');
 set(handles.trigger_r,'enable','on');
 guidata(hObject,handles)
-
-
 
 
 function n_trigs_Callback(hObject, eventdata, handles)
@@ -573,6 +586,8 @@ guidata(hObject,handles)
 
 % --- Executes on button press in sng_shot.
 function sng_shot_Callback(hObject, eventdata, handles)
+% Runs a force trigger when scopes are in triggered mode to check
+% acqusition runs as expected
 % hObject    handle to sng_shot (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
@@ -580,18 +595,18 @@ import LibTiePie.Const.*;
 import LibTiePie.Enum.*;
 if handles.acq.Value == 1
     return
-elseif handles.cont.Value == 1
+elseif handles.cont.Value == 1 % check if in continuous mode and throw error if so
     set(handles.msg_box,'String','Cannot force capture, continuous mode selected');
 else
-   set(handles.msg_box,'String','Acquiring single shot');
-    if handles.scp(1).IsRunning==1
-        handles.scp(1).stop();
-    end
-    handles.scp(1).start()
-    pause(1e-5)
-    if get(handles.cont,'Value')==0
-        handles.scp.forceTrigger()
-    end
+   set(handles.msg_box,'String','Acquiring single shot'); % Start trigger
+%     if handles.scp(1).IsRunning==1
+%         handles.scp(1).stop();
+%     end
+%     handles.scp(1).start()
+%     pause(1e-5)
+%     if get(handles.cont,'Value')==0
+%         handles.scp.forceTrigger()
+%     end
     %Wait for measurement to complete:
     while ~handles.scp(1).IsDataReady
         pause(1e-4); % 1 ms delay, to save CPU time.
@@ -686,6 +701,7 @@ clear handles.scp;
 
 % --- Executes on button press in cont.
 function cont_Callback(hObject, eventdata, handles)
+% Contiunuous mode check box
 % hObject    handle to cont (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
